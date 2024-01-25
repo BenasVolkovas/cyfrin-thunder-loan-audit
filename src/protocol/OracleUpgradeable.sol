@@ -3,6 +3,7 @@ pragma solidity 0.8.20;
 
 import {ITSwapPool} from "../interfaces/ITSwapPool.sol";
 import {IPoolFactory} from "../interfaces/IPoolFactory.sol";
+// @todo @audit follow best practices and add external imports at the top
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 contract OracleUpgradeable is Initializable {
@@ -21,11 +22,15 @@ contract OracleUpgradeable is Initializable {
         s_poolFactory = poolFactoryAddress;
     }
 
+    // @todo @audit price manipulation is possible here
+    // @todo @audit use forked tests for live and deployed contracts
     function getPriceInWeth(address token) public view returns (uint256) {
+        // @todo @audit add check for token zero address
         address swapPoolOfToken = IPoolFactory(s_poolFactory).getPool(token);
         return ITSwapPool(swapPoolOfToken).getPriceOfOnePoolTokenInWeth();
     }
 
+    // @todo @audit no need for this function as getPriceInWeth is public
     function getPrice(address token) external view returns (uint256) {
         return getPriceInWeth(token);
     }

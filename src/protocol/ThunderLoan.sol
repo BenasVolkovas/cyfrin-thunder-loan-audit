@@ -102,12 +102,16 @@ contract ThunderLoan is
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
+    // @note mapping from underlying token to asset token (USDC -> USDC shares)
     mapping(IERC20 => AssetToken) public s_tokenToAssetToken;
 
     // The fee in WEI, it should have 18 decimals. Each flash loan takes a flat fee of the token price.
+    // @todo @audit constant or immutable
     uint256 private s_feePrecision;
+    // @todo @audit constant or immutable
     uint256 private s_flashLoanFee; // 0.3% ETH fee
 
+    // @note mapping from token to bool (is currently flash loaning)
     mapping(IERC20 token => bool currentlyFlashLoaning)
         private s_currentlyFlashLoaning;
 
@@ -166,6 +170,8 @@ contract ThunderLoan is
     /*//////////////////////////////////////////////////////////////
                            EXTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+    // @todo @audit naming for tswapAddress is confusing (use poolFactoryAddress)
+    // @todo @audit initializers can be front-run
     function initialize(address tswapAddress) external initializer {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
@@ -174,16 +180,20 @@ contract ThunderLoan is
         s_flashLoanFee = 3e15; // 0.3% ETH fee
     }
 
+    // @todo @audit where is the natspec
     function deposit(
         IERC20 token,
         uint256 amount
     ) external revertIfZero(amount) revertIfNotAllowedToken(token) {
         AssetToken assetToken = s_tokenToAssetToken[token];
         uint256 exchangeRate = assetToken.getExchangeRate();
+        // @note 100e18 USDC * 1e18 / 2e18 = 50e18 USDC
+        // @note exchangeRate is never zero because of condition in function
         uint256 mintAmount = (amount * assetToken.EXCHANGE_RATE_PRECISION()) /
             exchangeRate;
         emit Deposit(msg.sender, token, amount);
         assetToken.mint(msg.sender, mintAmount);
+        // @todo @followup why are we calculating the flash loan fee here?
         uint256 calculatedFee = getCalculatedFee(token, amount);
         assetToken.updateExchangeRate(calculatedFee);
         token.safeTransferFrom(msg.sender, address(assetToken), amount);
@@ -191,9 +201,10 @@ contract ThunderLoan is
 
     /// @notice Withdraws the underlying token from the asset token
     /// @param token The token they want to withdraw from
+    // @todo @audit the amount of asset token is not the underlying token
     /// @param amountOfAssetToken The amount of the underlying they want to withdraw
     function redeem(
-        IERC20 token,
+        IERC20 token, // @note underlying token
         uint256 amountOfAssetToken
     ) external revertIfZero(amountOfAssetToken) revertIfNotAllowedToken(token) {
         AssetToken assetToken = s_tokenToAssetToken[token];
@@ -201,6 +212,8 @@ contract ThunderLoan is
         if (amountOfAssetToken == type(uint256).max) {
             amountOfAssetToken = assetToken.balanceOf(msg.sender);
         }
+        // @note 100e18 USDC * 1.006e18 / 1e18 = 100.6e18 USDC
+        // @todo @followup is the math correct? it looks like I can withdraw more than I deposited
         uint256 amountUnderlying = (amountOfAssetToken * exchangeRate) /
             assetToken.EXCHANGE_RATE_PRECISION();
         emit Redeemed(msg.sender, token, amountOfAssetToken, amountUnderlying);
@@ -208,11 +221,12 @@ contract ThunderLoan is
         assetToken.transferUnderlyingTo(msg.sender, amountUnderlying);
     }
 
+    // @note @ok reviewed the function
     function flashloan(
         address receiverAddress,
         IERC20 token,
         uint256 amount,
-        bytes calldata params
+        bytes calldata params // @note params for receiver contract
     ) external revertIfZero(amount) revertIfNotAllowedToken(token) {
         AssetToken assetToken = s_tokenToAssetToken[token];
         uint256 startingBalance = IERC20(token).balanceOf(address(assetToken));
@@ -221,6 +235,7 @@ contract ThunderLoan is
             revert ThunderLoan__NotEnoughTokenBalance(startingBalance, amount);
         }
 
+        // @todo @followup does this actually work?
         if (receiverAddress.code.length == 0) {
             revert ThunderLoan__CallerIsNotContract();
         }
@@ -233,6 +248,7 @@ contract ThunderLoan is
         // @todo @followup event before interaction
         emit FlashLoan(receiverAddress, token, amount, fee, params);
 
+        // @todo @followup do we need a checker to see if the token is already flash loaning?
         s_currentlyFlashLoaning[token] = true;
         // @todo @followup reentrancy?
         assetToken.transferUnderlyingTo(receiverAddress, amount);
@@ -270,6 +286,7 @@ contract ThunderLoan is
         token.safeTransferFrom(msg.sender, address(assetToken), amount);
     }
 
+    // @note reviewed the function
     function setAllowedToken(
         IERC20 token,
         bool allowed
@@ -296,6 +313,7 @@ contract ThunderLoan is
             emit AllowedTokenSet(token, assetToken, allowed);
             return assetToken;
         } else {
+            // @todo @audit add check before delete that token is allowed
             AssetToken assetToken = s_tokenToAssetToken[token];
             delete s_tokenToAssetToken[token];
             emit AllowedTokenSet(token, assetToken, allowed);
@@ -303,14 +321,18 @@ contract ThunderLoan is
         }
     }
 
+    // @note @ok - reviewed the function
     function getCalculatedFee(
         IERC20 token,
         uint256 amount
     ) public view returns (uint256 fee) {
         //slither-disable-next-line divide-before-multiply
+        // @todo @audit the value is zero if the token not present in the oracle
+        // @note 100e18 MOON * 2e18 / 1e18 = 200e18 MOON
         uint256 valueOfBorrowedToken = (amount *
             getPriceInWeth(address(token))) / s_feePrecision;
         //slither-disable-next-line divide-before-multiply
+        // @note 200e18 MOON * 3e15 / 1e18 = 600e15 MOON = 0.6 MOON
         fee = (valueOfBorrowedToken * s_flashLoanFee) / s_feePrecision;
     }
 
