@@ -322,6 +322,8 @@ contract ThunderLoan is
     }
 
     // @note @ok - reviewed the function
+    // @note amount is the amount being borrowed
+    // @note token is the token being borrowed
     function getCalculatedFee(
         IERC20 token,
         uint256 amount

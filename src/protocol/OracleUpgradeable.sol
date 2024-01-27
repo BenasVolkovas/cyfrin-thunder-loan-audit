@@ -27,6 +27,8 @@ contract OracleUpgradeable is Initializable {
     function getPriceInWeth(address token) public view returns (uint256) {
         // @todo @audit add check for token zero address
         address swapPoolOfToken = IPoolFactory(s_poolFactory).getPool(token);
+        // @todo @audit function ignores token decimals
+        // @question is 6 and 18 decimals return correct values?
         return ITSwapPool(swapPoolOfToken).getPriceOfOnePoolTokenInWeth();
     }
 
