@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import { Test, console } from "forge-std/Test.sol";
-import { BaseTest, ThunderLoan } from "./BaseTest.t.sol";
-import { AssetToken } from "../../src/protocol/AssetToken.sol";
-import { MockFlashLoanReceiver } from "../mocks/MockFlashLoanReceiver.sol";
+import {Test, console} from "forge-std/Test.sol";
+import {BaseTest, ThunderLoan} from "./BaseTest.t.sol";
+import {AssetToken} from "../../src/protocol/AssetToken.sol";
+import {MockFlashLoanReceiver} from "../mocks/MockFlashLoanReceiver.sol";
 
 contract ThunderLoanTest is BaseTest {
     uint256 constant AMOUNT = 10e18;
@@ -38,13 +38,21 @@ contract ThunderLoanTest is BaseTest {
     function testSettingTokenCreatesAsset() public {
         vm.prank(thunderLoan.owner());
         AssetToken assetToken = thunderLoan.setAllowedToken(tokenA, true);
-        assertEq(address(thunderLoan.getAssetFromToken(tokenA)), address(assetToken));
+        assertEq(
+            address(thunderLoan.getAssetFromToken(tokenA)),
+            address(assetToken)
+        );
     }
 
     function testCantDepositUnapprovedTokens() public {
         tokenA.mint(liquidityProvider, AMOUNT);
         tokenA.approve(address(thunderLoan), AMOUNT);
-        vm.expectRevert(abi.encodeWithSelector(ThunderLoan.ThunderLoan__NotAllowedToken.selector, address(tokenA)));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ThunderLoan.ThunderLoan__NotAllowedToken.selector,
+                address(tokenA)
+            )
+        );
         thunderLoan.deposit(tokenA, AMOUNT);
     }
 
@@ -78,13 +86,51 @@ contract ThunderLoanTest is BaseTest {
 
     function testFlashLoan() public setAllowedToken hasDeposits {
         uint256 amountToBorrow = AMOUNT * 10;
-        uint256 calculatedFee = thunderLoan.getCalculatedFee(tokenA, amountToBorrow);
+        uint256 calculatedFee = thunderLoan.getCalculatedFee(
+            tokenA,
+            amountToBorrow
+        );
         vm.startPrank(user);
         tokenA.mint(address(mockFlashLoanReceiver), AMOUNT);
-        thunderLoan.flashloan(address(mockFlashLoanReceiver), tokenA, amountToBorrow, "");
+        thunderLoan.flashloan(
+            address(mockFlashLoanReceiver),
+            tokenA,
+            amountToBorrow,
+            ""
+        );
         vm.stopPrank();
 
-        assertEq(mockFlashLoanReceiver.getBalanceDuring(), amountToBorrow + AMOUNT);
-        assertEq(mockFlashLoanReceiver.getBalanceAfter(), AMOUNT - calculatedFee);
+        assertEq(
+            mockFlashLoanReceiver.getBalanceDuring(),
+            amountToBorrow + AMOUNT
+        );
+        assertEq(
+            mockFlashLoanReceiver.getBalanceAfter(),
+            AMOUNT - calculatedFee
+        );
+    }
+
+    function test_audit_RedeemsAfterLoan() public setAllowedToken hasDeposits {
+        uint256 amountToBorrow = AMOUNT * 10;
+        uint256 calculatedFee = thunderLoan.getCalculatedFee(
+            tokenA,
+            amountToBorrow
+        );
+
+        vm.startPrank(user);
+        tokenA.mint(address(mockFlashLoanReceiver), calculatedFee);
+        thunderLoan.flashloan(
+            address(mockFlashLoanReceiver),
+            tokenA,
+            amountToBorrow,
+            ""
+        );
+        vm.stopPrank();
+
+        uint256 amountToRedeem = type(uint256).max;
+
+        vm.startPrank(liquidityProvider);
+        thunderLoan.redeem(tokenA, amountToRedeem);
+        vm.stopPrank();
     }
 }

@@ -193,7 +193,7 @@ contract ThunderLoan is
             exchangeRate;
         emit Deposit(msg.sender, token, amount);
         assetToken.mint(msg.sender, mintAmount);
-        // @todo @followup why are we calculating the flash loan fee here?
+        // @todo @audit-high updating exchange when fee is not paid
         uint256 calculatedFee = getCalculatedFee(token, amount);
         assetToken.updateExchangeRate(calculatedFee);
         token.safeTransferFrom(msg.sender, address(assetToken), amount);
@@ -331,6 +331,7 @@ contract ThunderLoan is
         //slither-disable-next-line divide-before-multiply
         // @todo @audit the value is zero if the token not present in the oracle
         // @note 100e18 MOON * 2e18 / 1e18 = 200e18 MOON
+        // @todo @audit-high if the fee is going to be in the token, then the value should reflect that
         uint256 valueOfBorrowedToken = (amount *
             getPriceInWeth(address(token))) / s_feePrecision;
         //slither-disable-next-line divide-before-multiply

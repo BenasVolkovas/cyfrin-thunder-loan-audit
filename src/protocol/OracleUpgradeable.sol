@@ -28,7 +28,8 @@ contract OracleUpgradeable is Initializable {
         // @todo @audit add check for token zero address
         address swapPoolOfToken = IPoolFactory(s_poolFactory).getPool(token);
         // @todo @audit function ignores token decimals
-        // @question is 6 and 18 decimals return correct values?
+        // @question-skipped is 6 and 18 decimals return correct values?
+        // @reason T-Swap is out of scope for this audit (but it would a vulnerability if it was)
         return ITSwapPool(swapPoolOfToken).getPriceOfOnePoolTokenInWeth();
     }
 

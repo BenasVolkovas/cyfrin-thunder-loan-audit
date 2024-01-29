@@ -57,9 +57,12 @@ contract AssetToken is ERC20 {
     /*//////////////////////////////////////////////////////////////
                                FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+    // @question-answered where are the tokens stored?
+    // @answer they are stored in asset token contract
+
     constructor(
         address thunderLoan,
-        IERC20 underlying, // @question where are the tokens stored?
+        IERC20 underlying,
         string memory assetName,
         string memory assetSymbol
     )
@@ -101,7 +104,9 @@ contract AssetToken is ERC20 {
         // newExchangeRate = 1 (4 + 0.5) / 4
         // newExchangeRate = 1.125
         // @todo @audit too many storage reads
-        // @note what if the fee or supply is 0?
+        // @question-answered what if the fee or supply is 0?
+        // @answer supply won't be zero as we mint asset tokens before calling this function
+        // @answer if fee is zero, exchange rate will stay the same as no fee is charged
         // @note 1e18 * (100e18 + 0.6e18) / 100e18 = 1e18 * 100.6e18 / 100e18 = 1e18 * 1.006 = 1.006
         uint256 newExchangeRate = (s_exchangeRate * (totalSupply() + fee)) /
             totalSupply();
