@@ -11,6 +11,7 @@ import {MockFlashLoanReceiver} from "../mocks/MockFlashLoanReceiver.sol";
 import {ERC20Mock} from "../mocks/ERC20Mock.sol";
 import {BuffMockPoolFactory} from "../mocks/BuffMockPoolFactory.sol";
 import {BuffMockTSwap} from "../mocks/BuffMockTSwap.sol";
+import {ThunderLoanUpgraded} from "../../src/upgradedProtocol/ThunderLoanUpgraded.sol";
 
 contract ThunderLoanTest is BaseTest {
     uint256 constant AMOUNT = 10e18;
@@ -220,6 +221,21 @@ contract ThunderLoanTest is BaseTest {
         hacker.redeemTokens();
 
         assertGe(tokenA.balanceOf(address(hacker)), amountToBorrow + fee);
+    }
+
+    function test_audit_UpgradedThunderLoanStorageBreaks() public {
+        ThunderLoanUpgraded upgradedThunderLoan = new ThunderLoanUpgraded();
+
+        uint256 feeBeforeUpgrade = thunderLoan.getFee();
+
+        vm.prank(thunderLoan.owner());
+        thunderLoan.upgradeToAndCall(address(upgradedThunderLoan), "");
+
+        uint256 feeAfterUpgrade = upgradedThunderLoan.getFee();
+
+        console2.log("Fee before upgrade: ", feeBeforeUpgrade);
+        console2.log("Fee after upgrade: ", feeAfterUpgrade);
+        assertNotEq(feeBeforeUpgrade, feeAfterUpgrade);
     }
 }
 

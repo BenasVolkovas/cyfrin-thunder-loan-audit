@@ -85,6 +85,63 @@ function test_audit_RedeemsAfterLoan() public setAllowedToken hasDeposits {
     }
 ```
 
+### [H-2] Mixing up variable location causes storage collisions in `ThunderLoan::s_flashLoanFee` and `ThunderLoan::s_currentlyFlashLoaning`
+
+**Description:** `ThunderLoan` has 2 state variable in following order:
+
+```javascript
+    uint256 private s_feePrecision;
+    uint256 private s_flashLoanFee;
+```
+
+However, the upgraded version `ThunderLoanUpgraded.sol` has them in totally different order:
+
+```javascript
+    uint256 private s_flashLoanFee;
+    uint256 public constant FEE_PRECISION = 1e18;
+```
+
+Due to how Solidity storage works, after the upgrade the `s_flashLoanFee` will have the value of `s_feePrecision`. You cannot adjust the position of storage variables, and removing storage variables for constant variables, breaks the storage locations as well.
+
+**Impact:** After the upgrade, the `s_flashLoanFee` will have the value of `s_feePrecision`, which is `1e18`. This means that users who take out flash loans after the upgrade will be charged incorrect fee.
+Additionally, the `s_currentlyFlashLoaning` variable is now in the same storage slot as `s_flashLoanFee`, which breaks the main functionality of the protocol.
+
+**Proof of Concept:**
+
+Place the following into `ThunderLoan.t.sol`:
+
+```javascript
+    import {ThunderLoanUpgraded} from "../../src/upgradedProtocol/ThunderLoanUpgraded.sol";
+
+    // ...
+
+    function test_audit_UpgradedThunderLoanStorageBreaks() public {
+        ThunderLoanUpgraded upgradedThunderLoan = new ThunderLoanUpgraded();
+
+        uint256 feeBeforeUpgrade = thunderLoan.getFee();
+
+        vm.prank(thunderLoan.owner());
+        thunderLoan.upgradeToAndCall(address(upgradedThunderLoan), "");
+
+        uint256 feeAfterUpgrade = upgradedThunderLoan.getFee();
+
+        console2.log("Fee before upgrade: ", feeBeforeUpgrade);
+        console2.log("Fee after upgrade: ", feeAfterUpgrade);
+        assertNotEq(feeBeforeUpgrade, feeAfterUpgrade);
+    }
+
+```
+
+You can also see the sotrage layout difference by running `forge inspect ThunderLoan storage` and `forge inspect ThunderLoanUpgraded storage`.
+
+**Recommended Mitigation:** Instead of making the `FEE_PRECISION` variable constant, make it a state variable but leave it as blank. Also make sure to keep the storage variables in the same order.
+
+```diff
++   uint256 private s_blank0;
+    uint256 private s_flashLoanFee;
+    uint256 public constant FEE_PRECISION = 1e18;
+```
+
 ### [M-1] Using TSwap as price oracle leads to price and oracle manipulation attacks
 
 **Description:** The TSwap protocol is a constant product formula based AMM. Thr price of a token is determined by how many reserves are on either side of pool. Because of this, it is easy for malicious users to manipulate the price of a token by buying or selling a large amount of the tokens in the same transaction, essentially ignoring protocol fees.
